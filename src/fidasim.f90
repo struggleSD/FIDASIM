@@ -12135,7 +12135,7 @@ subroutine proton_f
     real(Float64) :: pgyro, phi, vnet_square, daomega, factor
     real(Float64) :: eb, pitch, erel, rate, E1, kappa
     integer :: ir, iphi, iz, ie, ip, ich, ie3, iray, ist
-    integer, dimension(:,:), allocatable :: ntot
+    integer :: ntot
     if(.not.any(thermal_mass.eq.H2_amu)) then
         write(*,'(T2,a)') 'PROTON_F: Thermal Deuterium is not present in plasma'
         return
@@ -12151,12 +12151,10 @@ subroutine proton_f
     allocate(ray_velocities(3,ptable%nsteps))
     allocate(proton%flux(ptable%nenergy, cfpd_chords%nchan))
     allocate(proton%prob(ptable%nenergy, cfpd_chords%nchan))
-    allocate(ntot(ptable%nenergy, cfpd_chords%nchan))
     allocate(proton%weight(ptable%nenergy,fbm%nenergy,fbm%npitch,fbm%nr,fbm%nz,fbm%nphi))
     ray_velocities = 0.d0
     proton%flux = 0.d0
     proton%prob = 0.d0
-    ntot = 0.d0
     proton%weight = 0.d0
 
     rate = 0.d0
@@ -12165,6 +12163,7 @@ subroutine proton_f
     !$OMP& ray_velocities,factor,ntot)
     channel_loop: do ich=1, cfpd_chords%nchan
         E3_loop: do ie3=1, ptable%nenergy
+            ntot = 0
             ray_loop: do iray=1, ptable%nrays
                 daomega = ptable%daomega(ie3,iray,ich)
                 ray_velocities = ptable%sightline(ie3,1:3,:,iray,ich)
@@ -12228,10 +12227,10 @@ subroutine proton_f
                             rate = rate*daomega
 
                             !! Store
+                            if (pgyro.gt.0.d0) ntot = ntot + 1
                             !$OMP CRITICAL(proton_weight)
                             proton%weight(ie3,ie,ip,ir,iz,iphi) = proton%weight(ie3,ie,ip,ir,iz,iphi) + rate
                             proton%prob(ie3,ich) = proton%prob(ie3,ich) + pgyro
-                            if (pgyro.gt.0.d0) ntot(ie3,ich) = ntot(ie3,ich) + 1.d0
                             proton%flux(ie3,ich) = proton%flux(ie3,ich) + rate * fbm%f(ie,ip,ir,iz,iphi) &
                                                                                * factor
                             !$OMP END CRITICAL(proton_weight)
@@ -12241,7 +12240,7 @@ subroutine proton_f
                 enddo step_loop
             enddo ray_loop
             !$OMP CRITICAL(pweight_ntot)
-            proton%prob(ie3,ich) = proton%prob(ie3,ich) / ntot(ie3,ich)
+            proton%prob(ie3,ich) = proton%prob(ie3,ich) / ntot
             !$OMP END CRITICAL(pweight_ntot)
         enddo E3_loop
     enddo channel_loop
