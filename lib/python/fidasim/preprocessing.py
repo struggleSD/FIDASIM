@@ -174,8 +174,17 @@ def check_inputs(inputs, use_abs_path=True):
               'calc_birth': zero_int,
               'calc_fida_wght': zero_int,
               'calc_npa_wght': zero_int,
-              'calc_neutron': zero_int}
+              'calc_neutron': zero_int,
+              'cell_split': zero_int}
 
+    if 'cell_split' in inputs:
+      if inputs['cell_split'] == 1:
+        schema['n_cells'] = zero_int
+      elif inputs['cell_split'] == 2:
+        schema['tol'] = zero_double
+    else:
+      inputs['cell_split'] = 0
+	
     err = check_dict_schema(schema, inputs, desc="simulation settings")
     if err:
         error('Invalid simulation settings. Exiting...', halt=True)
@@ -218,6 +227,21 @@ def check_inputs(inputs, use_abs_path=True):
         error('current_fractions do not sum to 1.0')
         print('sum(current_fractions) = {}'.format(np.sum(inputs['current_fractions'])))
         err = True
+        
+    if (inputs['cell_split'] < 0) or (inputs['cell_split'] > 2):
+    	error('Invalid switch value for splitting cells, Expected 0 (no split), 1 (split into n_cells), 2(split according to tol)')
+    	print('switch = {}'.format(inputs['cell_split']))
+    	err = True
+    	
+    if (inputs['cell_split'] == 1) and (inputs['n_cells'] < 0):
+    	error('Invalid value for n_cells, Expected n_cells >= 0')
+    	print('n_cells = {}'.format(inputs['n_cells']))
+    	err = True
+    	
+    if (inputs['cell_split'] == 2) and (inputs['tol'] < 0.0):
+    	error('Invalid tolerance level, Expected tol >= 0.0')
+    	print('tol = {}'.format(inputs['tol']))
+    	err = True
 
     ps = os.path.sep
     input_file = inputs['result_dir'].rstrip(ps) + ps + inputs['runid'] + '_inputs.dat'
@@ -420,7 +444,8 @@ def check_beam(inputs, nbi):
         err = True
 
     if nbi['naperture'] > 0:
-        if nbi['ashape'] not in [1, 2]:
+        for aper in nbi['ashape']:
+          if aper not in [1, 2]:
             error('Invalid aperture shape. Expected 1 (rectangular) or 2 (circular)')
             err = True
 
@@ -1204,8 +1229,15 @@ def write_namelist(filename, inputs):
         f.write("neutrals_file = '" + inputs['neutrals_file'] + "'    !! File containing the neutral density\n")
         f.write("stark_components = {:d}    !! Output stark components\n".format(inputs['stark_components']))
         f.write("verbose = {:d}    !! Verbose\n\n".format(inputs['verbose']))
+        
+        f.write("!! Adaptive Step Size Settings\n")
+        f.write("cell_split = {:d} !! Simulation switch for cell splitting, 0 (no split), 1 (split into n_cells), 2 (split according to tol)\n".format(inputs['cell_split']))
+        if inputs['cell_split'] == 1:
+        	f.write("n_cells = {:d} !! Number of splits for each cell\n".format(inputs['n_cells']))
+        elif inputs['cell_split'] == 2:
+        	f.write("tol = {:f}	!! Tolerance level for splitting cells\n".format(inputs['tol']))
 
-        f.write("!! Monte Carlo Settings\n")
+        f.write("\n!! Monte Carlo Settings\n")
         f.write("n_fida = {:d}    !! Number of FIDA mc particles\n".format(inputs['n_fida']))
         f.write("n_npa = {:d}    !! Number of NPA mc particles\n".format(inputs['n_npa']))
         f.write("n_pfida = {:d}    !! Number of Passive FIDA mc particles\n".format(inputs['n_pfida']))
